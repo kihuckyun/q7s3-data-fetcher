@@ -3,7 +3,8 @@ import pandas as pd
 import requests
 import psycopg2
 import os
-import asyncio
+import time
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -82,17 +83,20 @@ def update_database():
         except Exception as e:
             print("❌ DB 저장 실패:", e)
 
-# --- 3. 무한 반복 로봇 세팅 ---
-async def background_task():
+# --- 3. 무한 반복 로봇 세팅 (핵심 수정 부분!) ---
+def background_task():
+    time.sleep(5) # 서버가 정문을 열 수 있도록 5초 양보합니다.
     while True:
         update_database()
-        await asyncio.sleep(3600)
+        time.sleep(3600)
 
 @app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(background_task())
+def startup_event():
+    # 식당 정문 업무와 별개로, 주방 뒤에서 로봇을 조용히 실행시킵니다.
+    t = threading.Thread(target=background_task, daemon=True)
+    t.start()
 
-# --- 4. 웹 API 창구 (여기가 방금 추가된 핵심입니다!) ---
+# --- 4. 웹 API 창구 ---
 @app.get("/")
 def read_root():
     return {"status": "Q7S3 Bot is Running OK!"}
