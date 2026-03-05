@@ -2,3 +2,5 @@ yfinance
 pandas
 psycopg2-binary
 requests
+fastapi
+uvicorn
