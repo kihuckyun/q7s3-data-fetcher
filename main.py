@@ -10,10 +10,10 @@ import uvicorn
 
 app = FastAPI()
 
-# --- 보안 문 열어주기 (CORS 설정: 웹앱이 접속할 수 있게 허용) ---
+# --- 보안 문 열어주기 (웹앱이 접속할 수 있게 허용) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 모든 웹사이트 접속 허용
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,20 +86,19 @@ def update_database():
 async def background_task():
     while True:
         update_database()
-        await asyncio.sleep(3600) # 1시간 대기
+        await asyncio.sleep(3600)
 
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(background_task())
 
-# --- 4. 웹 API 창구 (프론트엔드 연결용) ---
+# --- 4. 웹 API 창구 (여기가 방금 추가된 핵심입니다!) ---
 @app.get("/")
 def read_root():
     return {"status": "Q7S3 Bot is Running OK!"}
 
 @app.get("/api/data")
 def get_latest_data():
-    """웹앱이 이 주소로 접속하면 DB에서 최신 데이터를 꺼내서 보내줍니다."""
     db_url = os.environ.get("DB_URL")
     if not db_url:
         return {"error": "DB_URL is missing"}
