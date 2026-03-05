@@ -5,9 +5,19 @@ import psycopg2
 import os
 import asyncio
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 app = FastAPI()
+
+# --- 보안 문 열어주기 (CORS 설정: 웹앱이 접속할 수 있게 허용) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # 모든 웹사이트 접속 허용
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- 1. 데이터 수집 함수들 ---
 def get_price(ticker_symbol):
@@ -44,8 +54,6 @@ def update_database():
         'vix': get_price("^VIX"), 'fx': get_price("KRW=X"),
         'rsi': get_rsi("QQQ"), 'fg': get_fear_and_greed()
     }
-    print("✅ 수집 완료:", data)
-    
     db_url = os.environ.get("DB_URL") 
     if db_url:
         try:
@@ -74,7 +82,7 @@ def update_database():
         except Exception as e:
             print("❌ DB 저장 실패:", e)
 
-# --- 3. 무한 반복 로봇 & 웹서버 세팅 ---
+# --- 3. 무한 반복 로봇 세팅 ---
 async def background_task():
     while True:
         update_database()
@@ -82,13 +90,37 @@ async def background_task():
 
 @app.on_event("startup")
 async def startup_event():
-    # 서버가 켜질 때 백그라운드 로봇도 같이 깨웁니다.
     asyncio.create_task(background_task())
 
+# --- 4. 웹 API 창구 (프론트엔드 연결용) ---
 @app.get("/")
 def read_root():
-    # 웹 주소로 접속하면 로봇이 잘 살아있는지 보여줍니다.
     return {"status": "Q7S3 Bot is Running OK!"}
+
+@app.get("/api/data")
+def get_latest_data():
+    """웹앱이 이 주소로 접속하면 DB에서 최신 데이터를 꺼내서 보내줍니다."""
+    db_url = os.environ.get("DB_URL")
+    if not db_url:
+        return {"error": "DB_URL is missing"}
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("SELECT qqqm_price, qld_price, sgov_price, iau_price, vix, fx, rsi, fg, updated_at FROM market_data WHERE id=1;")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if row:
+            return {
+                "qqqm": row[0], "qld": row[1], "sgov": row[2], "iau": row[3],
+                "vix": row[4], "fx": row[5], "rsi": row[6], "fg": row[7],
+                "updated_at": row[8]
+            }
+        else:
+            return {"error": "No data yet. Waiting for first update..."}
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
